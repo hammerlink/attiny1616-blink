@@ -1,0 +1,16 @@
+[package]
+name = "attiny1616-blink"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+embedded-hal = "0.2.3"
+panic-halt = "0.2"
+attiny-hal = { git = "https://github.com/Rahix/avr-hal", features = ["attiny167", "rt"] }
+avr-hal-generic = { git = "https://github.com/Rahix/avr-hal" }
+
+[profile.release]
+codegen-units = 1
+lto = "fat"
+opt-level = "s"
+panic = "abort"
