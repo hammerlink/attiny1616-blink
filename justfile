@@ -22,7 +22,8 @@ flashusb:
 flashusb416:
     # EXECUTE MANUALLY source ~/venvs/mcuprog/bin/activate 
     cargo build --release
-    pymcuprog write --erase -u /dev/ttyACM0 -d attiny416 --clk 115200 --filename ./target/backup.hex
+    avr-objcopy -O ihex target/avr-none/release/attiny1616-blink.elf target/416.hex
+    pymcuprog write --erase -u /dev/ttyACM0 -d attiny416 --clk 115200 --filename ./target/416.hex
 
 test:
     @echo "Running tests..."
