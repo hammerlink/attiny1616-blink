@@ -9,6 +9,7 @@ panic-halt = "0.2"
 # attiny-hal = { git = "https://github.com/Rahix/avr-hal", features = ["attiny167", "rt"] }
 # avr-hal-generic = { git = "https://github.com/Rahix/avr-hal" }
 avr-device = { path = "../avr-device/", features = ["attiny416"] }
+avr-device-macros = { path = "../avr-device/macros/" }
 
 [profile.release]
 codegen-units = 1
