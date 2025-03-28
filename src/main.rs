@@ -8,11 +8,11 @@ use avr_device::{
 use panic_halt as _; // Import panic handler
 
 // Define clock frequency
-const F_CPU: u32 = 20_000_000;
+const F_CPU: u32 = 32_768;
 // Simple delay function (not precise, for demo purposes)
 fn delay_ms(ms: u32) {
     // Rough approximation: adjust based on your clock speed
-    let cycles = (F_CPU / 1_000) * ms / 10; // ~ cycles per loop
+    let cycles = (F_CPU / 1_000) * ms / 15; // ~ cycles per loop
     let mut bool: bool = true;
     for _ in 0..cycles {
         // Use a volatile write to prevent optimization
@@ -51,6 +51,6 @@ pub extern "C" fn main() -> ! {
 
     loop {
         portb.outtgl.write(|w| w.pb5().set_bit()); // Toggle PB5
-        delay_ms(5); // Delay 500ms
+        delay_ms(500); // Delay 500ms
     }
 }
