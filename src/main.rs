@@ -43,7 +43,7 @@ pub extern "C" fn main() -> ! {
     protected_write(&dp, &dp.CLKCTRL.osc32kctrla, 0); // RUNSTDBY disabled
     protected_write(&dp, &dp.CLKCTRL.osc20mctrla, 0); // RUNSTDBY disabled
     protected_write(&dp, &dp.CLKCTRL.mclkctrlb, 0); // Set Prescaler disabled
-    protected_write(&dp, &dp.CLKCTRL.mclkctrla, 0); // Set Prescaler disabled
+    protected_write(&dp, &dp.CLKCTRL.mclkctrla, 1); // Select 32kHz clock
     protected_write(&dp, &dp.CLKCTRL.mclklock, 0b1); // LOCK CLOCK
 
     let portb = &dp.PORTB; // Reference to PORTB
@@ -51,6 +51,6 @@ pub extern "C" fn main() -> ! {
 
     loop {
         portb.outtgl.write(|w| w.pb5().set_bit()); // Toggle PB5
-        delay_ms(500); // Delay 500ms
+        delay_ms(5); // Delay 500ms
     }
 }
