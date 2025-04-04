@@ -3,15 +3,25 @@
 #![feature(abi_avr_interrupt)]
 #![feature(asm_experimental_arch)]
 
-use avr_device::{
-    attiny1616::{Peripherals, PORTA, RTC}, generic::{Reg, RegisterSpec, Resettable, Writable}, interrupt::{self, Mutex}
-};
-use core::{arch::asm, cell::RefCell};
-use panic_halt as _; // Import panic handler
+use core::{arch::asm, ptr};
 
-// Global variables for use in interrupt handlers
-static TIMER: Mutex<RefCell<Option<RTC>>> = Mutex::new(RefCell::new(None));
-static PORT: Mutex<RefCell<Option<PORTA>>> = Mutex::new(RefCell::new(None));
+use avr_device::{
+    attiny1616::{PORTA, Peripherals},
+    generic::{Reg, RegisterSpec, Resettable, Writable},
+};
+use panic_halt as _; // Import panic handler
+//
+// Define TCB0 base address and offsets
+const TCB0_BASE: usize = 0x0A40;
+const TCB0_CTRLA: *mut u8 = (TCB0_BASE + 0x00) as *mut u8; // Control A
+const TCB0_CTRLB: *mut u8 = (TCB0_BASE + 0x01) as *mut u8; // Control B
+const TCB0_INTCTRL: *mut u8 = (TCB0_BASE + 0x06) as *mut u8; // Interrupt Control
+const TCB0_CCMP: *mut u16 = (TCB0_BASE + 0x0C) as *mut u16; // CCMP (16-bit access)
+//// Optional: Interrupt flags for clearing
+const TCB0_INTFLAGS: *mut u8 = (TCB0_BASE + 0x04) as *mut u8;
+
+// Unsafe global for PORTA
+static mut PORTA_PTR: *mut PORTA = ptr::null_mut();
 
 fn protected_write<T>(dp: &Peripherals, reg: &Reg<T>, value: u8)
 where
@@ -30,125 +40,82 @@ pub extern "C" fn main() -> ! {
     let dp = Peripherals::take().unwrap(); // Take ownership of peripherals
 
     // Initialize the clock
-    // protected_write(&dp, &dp.SLPCTRL.ctrla, 0);
-    // protected_write(&dp, &dp.CLKCTRL.osc32kctrla, 0); // RUNSTDBY disabled
-    // protected_write(&dp, &dp.CLKCTRL.osc20mctrla, 0); // RUNSTDBY disabled
-    // protected_write(&dp, &dp.CLKCTRL.mclkctrlb, 0); // Set Prescaler disabled
-    // protected_write(&dp, &dp.CLKCTRL.mclkctrla, 1); // Select 32kHz clock
-    // protected_write(&dp, &dp.CLKCTRL.mclklock, 0b1); // LOCK CLOCK
+    protected_write(&dp, &dp.SLPCTRL.ctrla, 0);
+    protected_write(&dp, &dp.CLKCTRL.osc32kctrla, 0); // RUNSTDBY disabled
+    protected_write(&dp, &dp.CLKCTRL.osc20mctrla, 0); // RUNSTDBY disabled
+    protected_write(&dp, &dp.CLKCTRL.mclkctrla, 0); // Select 20 MHz clock
+    protected_write(&dp, &dp.CLKCTRL.mclkctrlb, 0); // Set Prescaler disabled
+    protected_write(&dp, &dp.CLKCTRL.mclklock, 0b1); // LOCK CLOCK
 
-    //let portb = &dp.PORTB; // Reference to PORTB
-    dp.PORTA.dirset.write(|w| {
-        w.pa0().set_bit();
-        w.pa1().set_bit();
-        w.pa2().set_bit();
-        w.pa3().set_bit();
-        w.pa4().set_bit();
-        w.pa5().set_bit();
-        w.pa6().set_bit();
-        w.pa7().set_bit()
-    }); // set all ports as output
-    dp.PORTB.dirset.write(|w| {
-        w.pb0().set_bit();
-        w.pb1().set_bit();
-        w.pb2().set_bit();
-        w.pb3().set_bit();
-        w.pb4().set_bit();
-        w.pb5().set_bit();
-        w.pb6().set_bit();
-        w.pb7().set_bit()
-    }); // set all ports as output
-    dp.PORTC.dirset.write(|w| {
-        w.pc0().set_bit();
-        w.pc1().set_bit();
-        w.pc2().set_bit();
-        w.pc3().set_bit();
-        w.pc4().set_bit();
-        w.pc5().set_bit()
-    }); // set all ports as output
+    // experimental code
+    // unsafe {
+    //     // Set CCMP to 5 (period = (5+1) * 50 ns = 300 ns)
+    //     core::ptr::write_volatile(TCB0_CCMP, 5);
+    // }
 
-    // Configure RTC timer interrupt
-    dp.RTC.clksel.write(|w| w.clksel().int1k());
-    dp.RTC.per.write(|w| w.bits(512)); // 512 overflow counter to get 500ms
-    dp.RTC.cmp.reset(); // Reset compare register
-    dp.RTC.intctrl.write(|w| {
-        w.cmp().clear_bit();
-        w.ovf().set_bit()
-    });
-    dp.RTC.ctrla.write(|w| {
-        w.runstdby().clear_bit();
-        w.prescaler().div1();
-        w.rtcen().set_bit()
-    });
+    // PA7 is used for RGB LED
+    dp.PORTA.dirset.write(|w| w.pa7().set_bit());
 
-    dp.PORTA.outclr.write(|w| {
-        w.pa0().set_bit();
-        w.pa1().set_bit();
-        w.pa2().set_bit();
-        w.pa3().set_bit();
-        w.pa4().set_bit();
-        w.pa5().set_bit();
-        w.pa6().set_bit();
-        w.pa7().set_bit()
-    }); // set all ports as output
-    dp.PORTB.outclr.write(|w| {
-        w.pb0().set_bit();
-        w.pb1().set_bit();
-        w.pb2().set_bit();
-        w.pb3().set_bit();
-        w.pb4().set_bit();
-        w.pb5().set_bit();
-        w.pb6().set_bit();
-        w.pb7().set_bit()
-    }); // set all ports as output
-    dp.PORTC.outclr.write(|w| {
-        w.pc0().set_bit();
-        w.pc1().set_bit();
-        w.pc2().set_bit();
-        w.pc3().set_bit();
-        w.pc4().set_bit();
-        w.pc5().set_bit()
-    }); // set all ports as output
+    // Example: Send green (R=0, G=255, B=0)
+    let color_a = [0x15, 0xa4, 0x22]; // GRB order for NEO_GRB
+    let color_b = [0xff, 0x00, 0x00]; // GRB order for NEO_GRB
+    let color_c = [0x00, 0xff, 0x00]; // GRB order for NEO_GRB
+    let color_d = [0x00, 0x00, 0xff]; // GRB order for NEO_GRB
 
- // Example: Send green (R=0, G=255, B=0)
-    let color = [0x00, 0xFF, 0x00]; // GRB order for NEO_GRB
-
+    unsafe {
+        PORTA_PTR = &raw const dp.PORTA as *const _ as *mut _;
+    }
     loop {
-        send_neopixel(&dp.PORTA, &color);
-        delay_ms(100); // Simple delay to see the color
+        send_color_to_rgb_led(&color_a, 650_000);
+        send_color_to_rgb_led(&color_b, 650_000);
+        send_color_to_rgb_led(&color_c, 650_000);
+        send_color_to_rgb_led(&color_d, 650_000);
     }
 }
 
-// Simple delay (tune based on clock speed)
-fn delay_ms(ms: u16) {
-    for _ in 0..ms {
-        for _ in 0..800 { // Adjust for 3.33 MHz clock
-            unsafe { asm!("nop") };
-        }
-    }
-}
+// bitbang, COLOR iS Green Red Blue
+fn send_color_to_rgb_led(color: &[u8; 3], wait_count: u32) {
+    let mut is_one_list: [bool; 24] = [false; 24];
+    let mut index = 0;
 
-// Bit-bang the NeoPixel signal on PA7
-fn send_neopixel(porta: &avr_device::attiny1616::PORTA, color: &[u8; 3]) {
     for byte in color.iter() {
         for bit in (0..8).rev() {
-            let is_one = (byte & (1 << bit)) != 0;
-            unsafe {
-                if is_one {
-                    // 1: ~700ns HIGH, ~600ns LOW
-                    porta.outset.write(|w| w.pa7().set_bit()); // HIGH
-                    asm!("nop; nop; nop; nop; nop; nop; nop; nop; nop; nop"); // ~500-700ns delay
-                    porta.outclr.write(|w| w.pa7().set_bit()); // LOW
-                    asm!("nop; nop; nop; nop; nop; nop"); // ~300-600ns delay
-                } else {
-                    // 0: ~350ns HIGH, ~800ns LOW
-                    porta.outset.write(|w| w.pa7().set_bit()); // HIGH
-                    asm!("nop; nop; nop"); // ~150-350ns delay
-                    porta.outclr.write(|w| w.pa7().set_bit()); // LOW
-                    asm!("nop; nop; nop; nop; nop; nop; nop; nop"); // ~400-800ns delay
-                }
+            is_one_list[index] = (byte & (1 << bit)) != 0;
+
+            index = (index + 1) % 24;
+        }
+    }
+    let mut is_one: bool;
+    is_one = is_one_list.get(0).unwrap().clone();
+
+    while index < 23 {
+        unsafe {
+            if is_one {
+                // HIGH, 800nS
+                (*PORTA_PTR).outset.write(|w| w.pa7().set_bit());
+                index = index + 1;
+                is_one = is_one_list[index];
+                asm!("nop", "nop", "nop", "nop"); // 250 nS
+                // LOW, 450nS
+                (*PORTA_PTR).outclr.write(|w| w.pa7().set_bit());
+            // asm!("nop"); // 250 nS
+            } else {
+                // HIGH, 400nS
+                (*PORTA_PTR).outset.write(|w| w.pa7().set_bit());
+                index = index + 1;
+                asm!("nop", "nop");
+                // LOW, 850nS
+                (*PORTA_PTR).outclr.write(|w| w.pa7().set_bit());
+                is_one = is_one_list[index];
+                asm!("nop", "nop", "nop");
             }
         }
     }
-    // Reset pulse: >50µs LOW (already ensured by loop delay)
+    let mut wait_index: u32 = 0;
+    while wait_index < wait_count {
+        wait_index += 1;
+        unsafe {
+            asm!("nop");
+        }
+    }
 }
