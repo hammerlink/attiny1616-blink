@@ -57,10 +57,11 @@ pub extern "C" fn main() -> ! {
     dp.PORTA.dirset.write(|w| w.pa7().set_bit());
 
     // Example: Send green (R=0, G=255, B=0)
-    let color_a = [0x15, 0xa4, 0x22]; // GRB order for NEO_GRB
-    let color_b = [0xff, 0x00, 0x00]; // GRB order for NEO_GRB
-    let color_c = [0x00, 0xff, 0x00]; // GRB order for NEO_GRB
-    let color_d = [0x00, 0x00, 0xff]; // GRB order for NEO_GRB
+    let color_a = [0xff, 0xff, 0xff]; // GRB WHITE
+    let color_b = [0xff, 0x00, 0x00]; // GRB GREEN
+    let color_c = [0x00, 0xff, 0x00]; // GRB RED
+    let color_d = [0x00, 0x00, 0xff]; // GRB BLUE
+    let color_e = [0x11, 0x11, 0x11]; // GRB BLACK
 
     unsafe {
         PORTA_PTR = &raw const dp.PORTA as *const _ as *mut _;
@@ -70,6 +71,7 @@ pub extern "C" fn main() -> ! {
         send_color_to_rgb_led(&color_b, 650_000);
         send_color_to_rgb_led(&color_c, 650_000);
         send_color_to_rgb_led(&color_d, 650_000);
+        send_color_to_rgb_led(&color_e, 650_000);
     }
 }
 
@@ -95,10 +97,9 @@ fn send_color_to_rgb_led(color: &[u8; 3], wait_count: u32) {
                 (*PORTA_PTR).outset.write(|w| w.pa7().set_bit());
                 index = index + 1;
                 is_one = is_one_list[index];
-                asm!("nop", "nop", "nop", "nop"); // 250 nS
+                asm!("nop", "nop", "nop", "nop");
                 // LOW, 450nS
                 (*PORTA_PTR).outclr.write(|w| w.pa7().set_bit());
-            // asm!("nop"); // 250 nS
             } else {
                 // HIGH, 400nS
                 (*PORTA_PTR).outset.write(|w| w.pa7().set_bit());

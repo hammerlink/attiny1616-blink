@@ -18,9 +18,13 @@ ping_pymu:
 
 flashusb:
     cargo build --bin at1616-rgb --release
-    avr-objcopy -O ihex target/avr-none/release/at1616-rgb.elf target/1616.hex
-    pymcuprog write --erase -t uart -u /dev/ttyUSB0 -d attiny1616 --clk 115200 --filename ./target/1616.hex
-    # avrdude -c serialupdi -p t1616 -P /dev/ttyUSB0 -U flash:w:target/avr-none/release/at1616-rgb.elf:e
+    # avr-objcopy -O ihex target/avr-none/release/at1616-rgb.elf target/1616.hex
+    # pymcuprog write --erase -t uart -u /dev/ttyUSB0 -d attiny1616 --clk 115200 --filename ./target/1616.hex
+    avrdude -c serialupdi -p t1616 -P /dev/ttyUSB0 -U flash:w:target/avr-none/release/at1616-rgb.elf:e
+
+avrassembly:
+    cargo build --bin at1616-rgb --release
+    avr-objdump -d target/avr-none/release/at1616-rgb.elf > dissambly-rgb.asm
 
 flashusb416:
     # EXECUTE MANUALLY source ~/venvs/mcuprog/bin/activate 
