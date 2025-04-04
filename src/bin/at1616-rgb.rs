@@ -72,7 +72,10 @@ pub extern "C" fn main() -> ! {
 
     // Configure PA0 as Button input
     dp.PORTA.dirset.write(|w| w.pa0().clear_bit()); // set PA0 as input
-    dp.PORTA.pin0ctrl.write(|w| w.isc().falling());
+    dp.PORTA.out.write(|w| w.pa0().set_bit()); // set PA0 as pull-up
+    dp.PORTA
+        .pin0ctrl
+        .write(|w| w.isc().falling().pullupen().set_bit()); // Enable falling edge interrupt & configure pull-up as enabled
 
     // experimental code
     // unsafe {
