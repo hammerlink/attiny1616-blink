@@ -8,6 +8,7 @@ use core::{arch::asm, ptr};
 use avr_device::{
     attiny1616::{PORTA, Peripherals},
     generic::{Reg, RegisterSpec, Resettable, Writable},
+    interrupt,
 };
 use panic_halt as _; // Import panic handler
 //
@@ -19,6 +20,8 @@ const TCB0_INTCTRL: *mut u8 = (TCB0_BASE + 0x06) as *mut u8; // Interrupt Contro
 const TCB0_CCMP: *mut u16 = (TCB0_BASE + 0x0C) as *mut u16; // CCMP (16-bit access)
 //// Optional: Interrupt flags for clearing
 const TCB0_INTFLAGS: *mut u8 = (TCB0_BASE + 0x04) as *mut u8;
+
+// BUTTON = PA0
 
 // Unsafe global for PORTA
 static mut PORTA_PTR: *mut PORTA = ptr::null_mut();
@@ -35,6 +38,26 @@ where
     reg.write(|w| unsafe { w.bits(value) });
 }
 
+static COLORS: [[u8; 3]; 6] = [
+    [0xff, 0xff, 0xff], // GRB WHITE
+    [0xff, 0x00, 0x00], // GRB GREEN
+    [0x00, 0xff, 0x00], // GRB RED
+    [0x00, 0x00, 0xff], // GRB BLUE
+    [0x00, 0x55, 0x99], // GRB PURPLE
+    [0x00, 0x00, 0x00], // GRB BLACK
+];
+
+static mut COLOR_INDEX: usize = 0;
+
+#[avr_device_macros::interrupt(attiny1616)]
+fn PORTA_PORT() {
+    unsafe {
+        send_color_to_rgb_led(&COLORS[COLOR_INDEX], 500);
+        COLOR_INDEX = (COLOR_INDEX + 1) % COLORS.len();
+        (*PORTA_PTR).intflags.write(|w| w.pa0().set_bit()); // Clear interrupt flag
+    }
+}
+
 #[unsafe(no_mangle)]
 pub extern "C" fn main() -> ! {
     let dp = Peripherals::take().unwrap(); // Take ownership of peripherals
@@ -47,6 +70,10 @@ pub extern "C" fn main() -> ! {
     protected_write(&dp, &dp.CLKCTRL.mclkctrlb, 0); // Set Prescaler disabled
     protected_write(&dp, &dp.CLKCTRL.mclklock, 0b1); // LOCK CLOCK
 
+    // Configure PA0 as Button input
+    dp.PORTA.dirset.write(|w| w.pa0().clear_bit()); // set PA0 as input
+    dp.PORTA.pin0ctrl.write(|w| w.isc().falling());
+
     // experimental code
     // unsafe {
     //     // Set CCMP to 5 (period = (5+1) * 50 ns = 300 ns)
@@ -56,23 +83,14 @@ pub extern "C" fn main() -> ! {
     // PA7 is used for RGB LED
     dp.PORTA.dirset.write(|w| w.pa7().set_bit());
 
-    // Example: Send green (R=0, G=255, B=0)
-    let color_a = [0xff, 0xff, 0xff]; // GRB WHITE
-    let color_b = [0xff, 0x00, 0x00]; // GRB GREEN
-    let color_c = [0x00, 0xff, 0x00]; // GRB RED
-    let color_d = [0x00, 0x00, 0xff]; // GRB BLUE
-    let color_e = [0x11, 0x11, 0x11]; // GRB BLACK
-
     unsafe {
         PORTA_PTR = &raw const dp.PORTA as *const _ as *mut _;
     }
-    loop {
-        send_color_to_rgb_led(&color_a, 650_000);
-        send_color_to_rgb_led(&color_b, 650_000);
-        send_color_to_rgb_led(&color_c, 650_000);
-        send_color_to_rgb_led(&color_d, 650_000);
-        send_color_to_rgb_led(&color_e, 650_000);
+    send_color_to_rgb_led(&COLORS[5], 200);
+    unsafe {
+        interrupt::enable();
     }
+    loop {}
 }
 
 // bitbang, COLOR iS Green Red Blue
